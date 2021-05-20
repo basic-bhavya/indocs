@@ -1,5 +1,6 @@
 import React from "react";
 import Block from "../block";
+import Link from 'next/link'
 
 function Screen3() {
   return (
@@ -18,9 +19,11 @@ function Screen3() {
           line2="Progressive Web App (PWA)"
           line3="Light on resources"
         />
-        <button className="p-3 bg-blue-600 border-2 border-slightWhite mt-5 w-1/2 max-w-xs rounded-lg z-10">
-          Open Scanner
-        </button>
+        <Link href="./scanner">
+          <button className="p-3 bg-blue-600 border-2 border-slightWhite mt-5 w-1/2 max-w-xs rounded-lg z-10">
+            Open Scanner
+          </button>
+        </Link>
       </div>
     </div>
   );
