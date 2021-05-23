@@ -1,11 +1,11 @@
 import { useStoreActions, useStoreState } from "easy-peasy";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import Link from "next/link";
-import Close from "../assets/close";
+import Close from "../assets/close-icon";
 import LeftArrowIcon from "../assets/left-arrow";
 import EmptyGalleryIcon from "../assets/empty-gallery-icon";
 import generatePdf from "../utils/generatePdf";
-import { createRef, useEffect, useReducer, useRef, useState } from "react";
+import { createRef, useEffect, useRef, useState } from "react";
 import PdfDoneIcon from "../assets/pdf-done-icon";
 // Import Swiper React components
 import SwiperCore, { Navigation, Thumbs } from "swiper/core";
@@ -15,24 +15,42 @@ import "swiper/swiper.min.css";
 import "swiper/components/navigation/navigation.min.css";
 import "swiper/components/thumbs/thumbs.min.css";
 import FilterSlider from "../components/filterSlider";
+import ImageFilters from "canvas-filters";
+import getOCR from "../utils/getOCR";
+import { saveOcrFirebase } from "../hooks/useStorage";
+import WhatsappLogo from "../assets/whatsapp-logo";
+import { useUser } from "../Handlers/useUser";
+import { useRouter } from "next/router";
+import OcrIcon from "../assets/ocr-icon";
+import DeleteIcon from "../assets/delete-icon";
+import EditIcon from "../assets/edit-icon";
+import DocumentIcon from "../assets/document-icon";
+
+// import { Jimage } from "react-jimp";
 
 SwiperCore.use([Navigation, Thumbs]);
 
 const Gallery = () => {
   const canvasRef = useRef();
+  const photoRef = useRef();
   const swiperRef = useRef();
+
+  const router = useRouter();
   const { images } = useStoreState((state) => state);
-  const { addImage, removeImage, removeAllImages } = useStoreActions(
+  const { removeImage, removeAllImages, replaceImage } = useStoreActions(
     (action) => action
   );
+  const { user } = useUser();
   const [pdfGenerated, setPdfGenrated] = useState(false);
   const [thumbsSwiper, setThumbsSwiper] = useState();
-  const [activeSlide, setActiveSlide] = useState();
-  const [brightness, setBrightness] = useState(100);
-  const [contrast, setContrast] = useState(100);
-  const [grayscale, setGrayscale] = useState(0);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [brightness, setBrightness] = useState(0);
+  const [contrast, setContrast] = useState(0);
+  const [grayscale, setGrayscale] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const imageRefs = useRef([]);
+  const [pdfRes, setPdfRes] = useState();
+  const [modal, setModal] = useState(false);
 
   if (imageRefs.current.length !== images.length) {
     // add or remove refs
@@ -42,9 +60,37 @@ const Gallery = () => {
   }
 
   const handleGeneratePdfFromImages = () => {
-    generatePdf(images);
+    const { pdfFile, pdfURL } = generatePdf(images);
+    setPdfRes({ pdfFile, pdfURL });
     setPdfGenrated(true);
     cleanUpUploadedImages();
+  };
+
+  const handlePdfShare = (e) => {
+    switch (e.target.id) {
+      case "download": {
+        downloadPdf();
+        break;
+      }
+      default: {
+        console.log("something went wrong :/");
+      }
+    }
+  };
+
+  const downloadPdf = () => {
+    window.open(pdfRes.pdfURL, "_blank");
+  };
+
+  const handleOCR = async () => {
+    let data = await getOCR(images);
+    console.log("you", data);
+    try {
+      saveOcrFirebase(data);
+    } catch (error) {
+      console.log(error);
+    }
+    handleGeneratePdfFromImages();
   };
 
   const cleanUpUploadedImages = () => {
@@ -57,28 +103,38 @@ const Gallery = () => {
   const setFilterToImage = (image) => {
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
-    const _image = imageRefs.current;
+    const photo = photoRef.current;
 
-    console.log(imageRefs);
+    photo?.setAttribute("src", image.src);
 
     canvas.width = image.width;
     canvas.height = image.height;
-    context.filter = images.map((image, i) => {
-      canvas.width = image.width;
-      canvas.height = image.height;
-      context.filter = "contrast(1.4) sepia(1) drop-shadow(-9px 9px 3px #e81)";
-      context.drawImage(_image[i].current, 0, 0);
+    context.drawImage(photo, 0, 0);
+    const ImageData = context.getImageData(0, 0, image.width, image.height);
+    const filtered = grayscale
+      ? ImageFilters.GrayScale(
+          ImageFilters.BrightnessContrastPhotoshop(
+            ImageData,
+            parseFloat(brightness),
+            parseFloat(contrast)
+          )
+        )
+      : ImageFilters.BrightnessContrastPhotoshop(
+          ImageData,
+          parseFloat(brightness),
+          parseFloat(contrast)
+        );
+    context.putImageData(filtered, 0, 0);
 
-      canvas.toBlob((blob) => {
-        const url = URL.createObjectURL(blob);
-        addImage({
-          src: url,
-          width: image.naturalWidth,
-          height: image.naturalHeight,
-        });
-        URL.revokeObjectURL(blob);
-      });
+    canvas.toBlob((blob) => {
+      const url = URL.createObjectURL(blob);
+      replaceImage({ activeSlide, url });
+      URL.revokeObjectURL(blob);
     });
+
+    setBrightness(1);
+    setContrast(1);
+    setGrayscale(false);
   };
 
   return (
@@ -117,20 +173,26 @@ const Gallery = () => {
             }}
             onSlideChange={(e) => setActiveSlide(e.activeIndex)}
             // loop={true}
+            autoHeight={true}
             spaceBetween={10}
             navigation={true}
             thumbs={{ swiper: thumbsSwiper }}
             className="mySwiper2"
             ref={swiperRef}
+            pagination={{ type: "fraction" }}
           >
             {images.map(({ src }, index) => (
               <SwiperSlide key={src}>
                 <img
                   ref={imageRefs.current[index]}
                   style={{
-                    filter: `brightness(${brightness}%) contrast(${contrast}%) grayscale(${grayscale}%)`,
+                    filter: `brightness(${
+                      (parseFloat(brightness) + 100) / 100
+                    }) contrast(${
+                      (parseFloat(contrast) + 100) / 100
+                    }) grayscale(${grayscale ? 1 : 0})`,
                   }}
-                  className={`py-3 px-2`}
+                  className={`py-3 px-2 max-h-[70vh] w-screen object-contain`}
                   src={src}
                 />
               </SwiperSlide>
@@ -152,7 +214,7 @@ const Gallery = () => {
               <SwiperSlide key={src}>
                 <img
                   ref={imageRefs.current[index]}
-                  className={`py-3 px-2 filter`}
+                  className={`py-3 px-2`}
                   src={src}
                 />
               </SwiperSlide>
@@ -161,28 +223,61 @@ const Gallery = () => {
 
           {/* BUTTONS */}
           {!isEditing && (
-            <div className="flex justify-center">
+            <div className="grid grid-cols-4 grid-rows-1 justify-items-center">
               {images.length > 0 && (
-                <button
-                  key="pdf"
-                  className="text-white border-2 border-white m-3 p-1"
-                  onClick={handleGeneratePdfFromImages}
-                >
-                  GENERATE PDF
-                </button>
+                <>
+                  <button
+                    key="pdf"
+                    className="text-white rounded-lg m-3 p-1 border-l-2 border-r-2 border-white font-nunito text-sm"
+                    // style={{
+                    //   backgroundColor: 'rgb(31, 41, 55)'
+                    // }}
+                    onClick={handleGeneratePdfFromImages}
+                  >
+                    <DocumentIcon width={'4rem'} height={"2rem"} />
+                    <div className="mt-1">Pdf</div>
+                  </button>
+                  <button
+                    key="pdfocr"
+                    className="text-white m-3 rounded-lg p-1 border-l-2 border-r-2 border-white font-nunito text-sm"
+                    // style={{
+                    //   backgroundColor: 'rgb(31, 41, 55)'
+                    // }}
+                    onClick={handleGeneratePdfFromImages}
+                  >
+                    <OcrIcon width={'4rem'} height={"2rem"} />
+                    <div className="mt-1">Pdf+OCR</div>
+                  </button>
+                </>
               )}
               <button
-                className="text-white border-2 border-white m-3 p-1"
+                className="text-white m-3 p-1 rounded-lg border-l-2 border-r-2 border-white font-nunito text-sm" 
+                // style={{
+                //   backgroundColor: 'rgb(31, 41, 55)'
+                // }}
                 onClick={() => removeImage(activeSlide)}
               >
-                Delete
+                <DeleteIcon width={'4rem'} height={"2rem"} />
+                <div className="mt-1">Delete</div>
                 {/* <Close imageIndex={index} /> */}
               </button>
               <button
-                className="text-white border-2 border-white m-3 p-1"
-                onClick={() => setIsEditing(true)}
+                className="text-white rounded-lg m-3 p-1 border-l-2 border-r-2 border-white font-nunito text-sm"
+                // style={{
+                //   backgroundColor: 'rgb(31, 41, 55)'
+                // }}
+                onClick={() => {
+                  // router.push({
+                  //   pathname: "/edit",
+                  //   query: {
+                  //     activeSlide: activeSlide,
+                  //   },
+                  // });
+                  setIsEditing(true);
+                }}
               >
-                Edit
+                <EditIcon width={'4rem'} height={"2rem"} />
+                <div className="mt-1">Edit</div>
                 {/* <Close imageIndex={index} /> */}
               </button>
             </div>
@@ -191,20 +286,27 @@ const Gallery = () => {
           {/* SLIDERS */}
           {isEditing && (
             <div className="grid grid-cols-12 grid-rows-3 items-center w-full justify-center">
-              <div className="col-span-2 text-white ml-2">Brightness</div>
+              <div className="col-span-2 text-white ml-2">Brightness:</div>
               <div className="col-start-4 col-span-7 row-span-1 my-[0.01rem] ml-2">
                 <FilterSlider valueSetter={setBrightness} />
               </div>
-              <div className="col-span-2 text-white ml-2">Contrast</div>
+              <div className="col-span-3 text-white ml-2">Contrast:</div>
               <div className="col-start-4 col-span-7 row-span-1 my-[0.01rem] ml-2">
                 <FilterSlider valueSetter={setContrast} />
               </div>
               <div className="col-span-2 text-white ml-2">Grayscale</div>
-              <div className="col-start-4 col-span-7 row-span-1 my-[0.01rem] ml-2">
-                <FilterSlider valueSetter={setGrayscale} />
-              </div>
               <div
-                onClick={() => setIsEditing(false)}
+                onClick={() => setGrayscale((grayscale) => !grayscale)}
+                className="col-start-4 col-span-3 justify-self-start row-span-1 m-2 w-5 h-5 rounded-sm"
+                style={{
+                  backgroundColor: grayscale ? "rgb(100,255,0)" : "white",
+                }}
+              ></div>
+              <div
+                onClick={() => {
+                  setFilterToImage(images[activeSlide]);
+                  setIsEditing(false);
+                }}
                 className="col-start-11 col-span-2 row-span-full row-start-1 justify-self-center self-center align-middle"
               >
                 <Close width={50} />
@@ -213,30 +315,91 @@ const Gallery = () => {
           )}
         </motion.div>
       ) : (
-        <div className="h-[90vh] flex justify-center items-center flex-col">
+        <div
+          className="h-[90vh] w-screen flex justify-center items-center flex-col"
+          style={{
+            position: "absolute",
+            top: "10%",
+          }}
+        >
           {pdfGenerated ? (
             <>
               <PdfDoneIcon />
               <div className="text-gray-300 text-center mt-3 px-3 sm:text-lg text-sm overflow-visible">
                 <span className="text-xl font-bold">Done!</span>
-                <br /> Your pdf should have opened in a new tab <br />{" "}
-                <div className="border-b-[1px] border-gray-300 pb-2">
-                  Make sure you save it before closing the tab
+                <br /> <div className="my-3">
+                  Your pdf is generated
+                </div> <br />{" "}
+              </div>
+              {modal && (
+                <div className="text-red-400">
+                  You need to login to use this feature
                 </div>
+              )}
+              <div className="flex flex-col">
+                <motion.button
+                  className="border-white border-2 bg-[#4CAF50] rounded-lg p-2 text-white my-2"
+                  initial={{
+                    opacity: 1,
+                  }}
+                  animate={{
+                    opacity: !!user ? 1 : 0.2,
+                  }}
+                  transition={{
+                    duration: 0.7,
+                  }}
+                  onClick={() =>
+                    !!user ? console.log("hello") : setModal(true)
+                  }
+                >
+                  <div className="flex justify-evenly">
+                    <div>Share on</div>
+                    <div className="h-[100%] w-[20%] mt-1">
+                      <WhatsappLogo />
+                    </div>
+                  </div>
+                </motion.button>
+                <motion.button
+                  className="border-white border-2 bg-red-500 rounded-lg p-2 text-white my-2"
+                  initial={{
+                    opacity: 1,
+                  }}
+                  animate={{
+                    opacity: !!user ? 1 : 0.2,
+                  }}
+                  transition={{
+                    duration: 0.7,
+                  }}
+                  onClick={() =>
+                    !!user ? console.log("hello") : setModal(true)
+                  }
+                >
+                  Copy URL
+                </motion.button>
+                <button
+                  id="download"
+                  onClick={handlePdfShare}
+                  className="border-white border-2 bg-primary rounded-lg p-2 text-white my-2"
+                >
+                  Download PDF
+                </button>
               </div>
             </>
           ) : (
             <>
+              {/* <div className="top-3"> */}
               <EmptyGalleryIcon />
               <div className="text-gray-300 text-center mt-3 px-3 sm:text-lg text-sm">
                 Oops! looks like there are no images in your document right now,
                 go back and click a few
               </div>
+              {/* </div> */}
             </>
           )}
         </div>
       )}
-      <canvas className="w-full" ref={canvasRef}></canvas>
+      <canvas className="w-full hidden" ref={canvasRef}></canvas>
+      <img className="hidden" ref={photoRef}></img>
     </div>
   );
 };

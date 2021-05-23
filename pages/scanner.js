@@ -5,13 +5,17 @@ import { motion } from "framer-motion";
 import UploadIcon from "../assets/upload";
 import { getMedia, resizeCanvas } from "../utils/camera-functions";
 import useBlobImage from "../utils/blob";
-// import { invertFilter } from "../utils/image-processing";
+import { returnControlPoints, scanImage } from "../utils/image-processing";
+import Edit from './edit';
+import { useRouter } from 'next/router'
 
 const Camera = () => {
   // * References
   const canvasRef = useRef();
   const videoRef = useRef();
   const photoRef = useRef();
+  const router = useRouter()
+  // const [edit,setEdit] = useState(false);
 
   // * Store state and functions
   const { images } = useStoreState((state) => state);
@@ -31,8 +35,15 @@ const Camera = () => {
 
     resizeCanvas(canvas, video);
 
-    if (video.videoWidth)
+    if (video.videoWidth) {
       context.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+    }
+
+    // Scan
+    let ar = returnControlPoints(canvas, video.videoHeight);
+    const imgMat = scanImage(canvas, ar);
+    console.log(ar)
+    cv.imshow(canvas, imgMat);
 
     toBlob(canvas, photo, video.videoWidth, video.videoHeight);
     setPop(true);
@@ -71,26 +82,34 @@ const Camera = () => {
     });
   };
 
-  const handleImageUpload = (e) => {
+    const handleImageUpload = (e) => {
     const fileList = e.target.files;
     const fileArray = fileList ? Array.from(fileList) : [];
 
     // Uploaded images are read and the app state is updated.
     const fileToImagePromises = fileArray.map(fileToImageURL);
     Promise.all(fileToImagePromises).then((res) => {
-      res.map((image) =>
+      res.map((image) => {
+        console.log(image.src)
         addImage({
           src: image.src,
           width: image.naturalWidth,
           height: image.naturalHeight,
         })
+      }
       );
     });
   };
+  const editPage = () => {
+    router.push('/edit');
+  }
 
   return (
     <>
-      <motion.div key="wrapper" className="wrapper h-screen overflow-hidden">
+      <motion.div
+        key="wrapper"
+        className="wrapper h-screen overflow-hidden w-screen"
+      >
         <div className="mt-10">
           <video
             id="video"
@@ -100,7 +119,6 @@ const Camera = () => {
           ></video>
         </div>
         <div className="w-full flex justify-between items-center mt-5 h-20 px-2 overflow-visible">
-          {/* <div className="w-3/5"></div> */}
           <div className="w-14">
             <label>
               <UploadIcon />
@@ -128,12 +146,12 @@ const Camera = () => {
             onClick={() => {
               setInit(true);
               takeSnapshot();
+              // editPage();
             }}
           >
             <motion.div
-              className={`w-14 transform  ${
-                init ? "-translate-x-3" : "-translate-x-7 -translate-y-3"
-              } font-extrabold`}
+              className={`w-14 transform  ${init ? "-translate-x-3" : "-translate-x-7 -translate-y-3"
+                } font-extrabold`}
             >
               {/* <div className={`w-14 transform  font-extrabold`}> */}
               {/* {images.length > 0 ? images.length : ""} */}

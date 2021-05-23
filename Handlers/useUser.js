@@ -20,10 +20,10 @@ const useUser = () => {
     return firebase
       .auth()
       .signOut()
-      .then(() => {
-        // Sign-out successful.
-        router.push("/login");
-      })
+      // .then(() => {
+      //   // Sign-out successful.
+      //   router.push("/");
+      // })
       .catch((e) => {
         console.error(e);
       });
@@ -45,10 +45,10 @@ const useUser = () => {
     });
 
     const userFromCookie = getUserFromCookie();
-    if (!userFromCookie) {
-      router.push("/");
-      return;
-    }
+    // if (!userFromCookie) {
+    //   router.push("/");
+    //   return;
+    // }
     setUser(userFromCookie);
 
     return () => {

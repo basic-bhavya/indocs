@@ -1,12 +1,22 @@
-import React from "react";
+import React, { useState } from "react";
 import { useUser } from "../Handlers/useUser";
+import getOCR from "../utils/getOCR";
 
-const loginTest = () => {
+const LoginTest = () => {
   const { user, logout } = useUser();
+  
+  
+  
+  const changeHandler = (e) => {
+    let selected = e.target.files[0];
+    console.log(selected.type);
+    getOCR(selected);
+    console.log(selected);
+  };
 
   if (user) {
     return (
-      <>
+      <div className="z-10">
         <h1>{user.name}</h1>
         <h1>{user.email}</h1>
         {user.profilePic ? (
@@ -15,8 +25,11 @@ const loginTest = () => {
           <p>No profile pic</p>
         )}
         <h1>Logged in dude</h1>
+        <input type="file" onChange={changeHandler} />
+
+
         <button onClick={() => logout()}> Logout! </button>
-      </>
+      </div>
     );
   } else {
     return (
@@ -27,4 +40,4 @@ const loginTest = () => {
   }
 };
 
-export default loginTest;
+export default LoginTest;

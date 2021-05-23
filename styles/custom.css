@@ -39,6 +39,10 @@ body {
     filter: brightness(100%);
     transition: 0.3s;
   } */
+/* ! FOR GALLERY ! */
+.gallery-wrapper {
+  height: calc(100vh - 1.5rem);
+}
 
 /* ! FOR SLIDER ! */
 .slider {
@@ -69,8 +73,8 @@ body {
 .swiper-slide img {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  /* height: 50vh; */
+  object-fit: contain;
 }
 
 .swiper-container {
@@ -86,8 +90,14 @@ body {
 }
 
 .mySwiper2 {
-  height: 80%;
+  height: 100%;
   width: 100%;
+}
+
+.mySwiper2 .swiper-slide-active {
+  height: 100%;
+  width: 100%;
+  min-height: 50vh;
 }
 
 .mySwiper {
@@ -98,7 +108,7 @@ body {
 
 .mySwiper .swiper-slide {
   width: 25%;
-  height: 100%;
+  height: 15vh;
   opacity: 0.4;
 }
 
@@ -110,5 +120,17 @@ body {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
+
+/* Firebase Auth container */
+
+/* #firebaseui_container {
+  width: 85%;
+  margin: 0 auto;
+} */
+
+/* .firebaseui-idp-button,
+.firebaseui-tenant-button {
+  max-width: 100%;
+} */

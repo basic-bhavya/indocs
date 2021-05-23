@@ -1,12 +1,15 @@
-import { opencv as cv } from "opencv.js";
-// import jimp from "jimp/browser/lib/jimp";
+/* global cv */
 
 /* 
 @param image: image
+optional param:
+  In order to find control points correctly pass in container's height(which holds the current image) to returnControlPoint() function
 Output: Contol Points
 */
 
-function returnControlPoints(image) {
+function returnControlPoints(img, imageHeight) {
+  let image = cv.imread(img);
+  image = reSizeImage(image, imageHeight);
   let imageCopy = preProcess(image);
   imageCopy = edgeDetector(imageCopy);
   let ar = findContours(imageCopy);
@@ -20,8 +23,9 @@ Output: Scanned Image
 */
 
 function scanImage(image, controlPointArray) {
-  let imageCopy = orderPointsAndTransform(imageCopy, ar);
-  imageCopy = scanFilter(imageCopy);
+  let imageCopy = cv.imread(image);
+  imageCopy = orderPointsAndTransform(imageCopy, controlPointArray);
+  // imageCopy = adaptiveThreshold(imageCopy);
   return imageCopy;
 }
 
@@ -73,15 +77,15 @@ function findContours(image) {
 
   let foundContour = null;
   let ar = [];
+
   for (let i = 0; i < countArray.length; i++) {
     let cnt = countArray[i];
     let perim = cv.arcLength(cnt, true);
     let approx = new cv.Mat();
-
     cv.approxPolyDP(cnt, approx, 0.02 * perim, true);
-    if (approx.rows == 4) {
+    let area = cv.contourArea(cnt, false);
+    if (approx.rows == 4 && area>=100) {
       foundContour = approx;
-      console.log("Found One!!");
       ar = defineCornerPointsFromMatObject(foundContour);
       break;
     }
@@ -204,24 +208,13 @@ function orderPointsAndTransform(image, ar) {
   return dstImage;
 }
 
-// Generate points array from control points
-function generatePointArray(tl, tr, bl, br) {
-  let tlX = tl[0],
-    tlY = tl[1];
-  let trX = tr[0],
-    trY = tr[1];
-  let blX = bl[0],
-    blY = bl[1];
-  let brX = br[0],
-    brY = br[1];
-  let ar = [tlX, tlY, trX, trY, blX, blY, brX, brY];
-  return ar;
-}
-
 // Maintain aspect ratio: Use Jimp
-function reSizeImage(image, width, height) {
+function reSizeImage(image, height) {
   let dst = new cv.Mat();
-  let dsize = new cv.Size(width, height);
+  let imageHeight = image.rows;
+  let heightRatio = imageHeight / height;
+  let newWidth = heightRatio * image.cols;
+  let dsize = new cv.Size(newWidth, height);
   cv.resize(image, dst, dsize, 0, 0, cv.INTER_AREA);
   return dst;
 }
@@ -252,41 +245,19 @@ function logImageDetails(src) {
   );
 }
 
-/* --------------- JIMP FUNCTIONS --------------- */
-
-// threshold function
-async function scanFilter(image) {
-  const newImage = await jimp.read(image);
-  newImage.threshold({ max: 150 });
-  return newImage;
+function adaptiveThreshold(image) {
+  let dst = new cv.Mat();
+  cv.cvtColor(image, image, cv.COLOR_RGBA2GRAY, 0);
+  cv.adaptiveThreshold(
+    image,
+    dst,
+    255,
+    cv.ADAPTIVE_THRESH_GAUSSIAN_C,
+    cv.THRESH_BINARY,
+    3,
+    2
+  );
+  return dst;
 }
 
-// invert function
-async function invertFilter(image) {
-  const newImage = await jimp.read(image);
-  newImage.invert();
-  return newImage;
-}
-
-// sepia image
-async function sepiaFilter(image) {
-  const newImage = await jimp.read(image);
-  newImage.sepia();
-  return newImage;
-}
-
-// opacity image
-async function changeOpacity(image, opacity) {
-  const newImage = await jimp.read(image);
-  newImage.opacity(opacity);
-  return newImage;
-}
-
-// Fades each pixel by a factor between 0 and 1
-async function fadePixels(image, fadeMeasure) {
-  const newImage = await jimp.read(image);
-  newImage.fade(fadeMeasure);
-  return newImage;
-}
-
-export { invertFilter };
+export { returnControlPoints, scanImage };
