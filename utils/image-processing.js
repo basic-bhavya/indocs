@@ -9,7 +9,7 @@ Output: Contol Points
 
 function returnControlPoints(img, imageHeight) {
   let image = cv.imread(img);
-  image = reSizeImage(image, imageHeight);
+  // image = reSizeImage(image, imageHeight);
   let imageCopy = preProcess(image);
   imageCopy = edgeDetector(imageCopy);
   let ar = findContours(imageCopy);
@@ -208,7 +208,7 @@ function orderPointsAndTransform(image, ar) {
   return dstImage;
 }
 
-// Maintain aspect ratio: Use Jimp
+// Maintain aspect ratio
 function reSizeImage(image, height) {
   let dst = new cv.Mat();
   let imageHeight = image.rows;
@@ -259,5 +259,13 @@ function adaptiveThreshold(image) {
   );
   return dst;
 }
+
+// function jimpThreshold(image,mainImage){
+//   jimp.read(image).then((im)=>{
+//     im.threshold({max:150}).getBase64('image/png',(err,res)=>{
+//       res;
+//     })
+//   })
+// }
 
 export { returnControlPoints, scanImage };

@@ -5,10 +5,10 @@ import Close from "../assets/close-icon";
 import LeftArrowIcon from "../assets/left-arrow";
 import EmptyGalleryIcon from "../assets/empty-gallery-icon";
 import generatePdf from "../utils/generatePdf";
-import { createRef, useEffect, useRef, useState } from "react";
+import { createRef, useRef, useState } from "react";
 import PdfDoneIcon from "../assets/pdf-done-icon";
 // Import Swiper React components
-import SwiperCore, { Navigation, Thumbs } from "swiper/core";
+import SwiperCore, { Navigation, Thumbs, Pagination } from "swiper/core";
 import { Swiper, SwiperSlide } from "swiper/react";
 
 import "swiper/swiper.min.css";
@@ -17,25 +17,25 @@ import "swiper/components/thumbs/thumbs.min.css";
 import FilterSlider from "../components/filterSlider";
 import ImageFilters from "canvas-filters";
 import getOCR from "../utils/getOCR";
-import { saveOcrFirebase } from "../hooks/useStorage";
+import { saveOcrFirebase, saveToCloudLink } from "../hooks/useStorage";
 import WhatsappLogo from "../assets/whatsapp-logo";
 import { useUser } from "../Handlers/useUser";
 import { useRouter } from "next/router";
+import { createShareURL, bitlyURL } from "../utils/createShareURL";
 import OcrIcon from "../assets/ocr-icon";
 import DeleteIcon from "../assets/delete-icon";
 import EditIcon from "../assets/edit-icon";
 import DocumentIcon from "../assets/document-icon";
+import LoadingCircle from "../assets/loading-circle";
+import TickIcon from "../assets/tick-icon.js";
 
-// import { Jimage } from "react-jimp";
-
-SwiperCore.use([Navigation, Thumbs]);
+SwiperCore.use([Navigation, Thumbs, Pagination]);
 
 const Gallery = () => {
   const canvasRef = useRef();
   const photoRef = useRef();
   const swiperRef = useRef();
 
-  const router = useRouter();
   const { images } = useStoreState((state) => state);
   const { removeImage, removeAllImages, replaceImage } = useStoreActions(
     (action) => action
@@ -51,6 +51,10 @@ const Gallery = () => {
   const imageRefs = useRef([]);
   const [pdfRes, setPdfRes] = useState();
   const [modal, setModal] = useState(false);
+  const [isCopied, setCopied] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [url, setURL] = useState("");
+  const [shorturl, setShort_URL] = useState("");
 
   if (imageRefs.current.length !== images.length) {
     // add or remove refs
@@ -59,10 +63,30 @@ const Gallery = () => {
       .map((_, i) => imageRefs.current[i] || createRef());
   }
 
-  const handleGeneratePdfFromImages = () => {
+  const handleGeneratePdfFromImages = async () => {
     const { pdfFile, pdfURL } = generatePdf(images);
     setPdfRes({ pdfFile, pdfURL });
+    console.log(pdfRes);
     setPdfGenrated(true);
+    if (user) {
+      saveToCloudLink(pdfFile)
+        .then((big_url) => {
+          setURL(big_url);
+          return big_url;
+        })
+        .then((big_url) => {
+          console.log(big_url);
+          return bitlyURL(big_url);
+        })
+        .then((short_url) => setShort_URL(short_url))
+        .catch((error) => {
+          console.log(error);
+        });
+    } else {
+      setURL("fakeUser");
+    }
+    // let big_url = await saveToCloudLink(pdfFile);
+    // setURL(big_url);
     cleanUpUploadedImages();
   };
 
@@ -82,9 +106,32 @@ const Gallery = () => {
     window.open(pdfRes.pdfURL, "_blank");
   };
 
+  const saveToCloud = async (file, setCopied) => {
+    console.log(shorturl);
+    if (shorturl) {
+      await navigator.clipboard.writeText(shorturl);
+      setCopied(true);
+    }
+  };
+
+  const shareToOtherApps = async () => {
+    console.log("Sup");
+    let indocs_url = "https://indocs.vercel.com"
+    const shareData = {
+      title: "Indocs Document Share",
+      text: `${user.name} is sharing a document with you!!! \n Start using InDocs today at ${indocs_url}`,
+      url: shorturl,
+    };
+    try {
+      await navigator.share(shareData);
+      console.log("MDN shared successfully");
+    } catch (err) {
+      console.log("Error: " + err);
+    }
+  };
+
   const handleOCR = async () => {
     let data = await getOCR(images);
-    console.log("you", data);
     try {
       saveOcrFirebase(data);
     } catch (error) {
@@ -234,7 +281,7 @@ const Gallery = () => {
                     // }}
                     onClick={handleGeneratePdfFromImages}
                   >
-                    <DocumentIcon width={'4rem'} height={"2rem"} />
+                    <DocumentIcon width={"4rem"} height={"2rem"} />
                     <div className="mt-1">Pdf</div>
                   </button>
                   <button
@@ -243,21 +290,21 @@ const Gallery = () => {
                     // style={{
                     //   backgroundColor: 'rgb(31, 41, 55)'
                     // }}
-                    onClick={handleGeneratePdfFromImages}
+                    onClick={handleOCR}
                   >
-                    <OcrIcon width={'4rem'} height={"2rem"} />
+                    <OcrIcon width={"4rem"} height={"2rem"} />
                     <div className="mt-1">Pdf+OCR</div>
                   </button>
                 </>
               )}
               <button
-                className="text-white m-3 p-1 rounded-lg border-l-2 border-r-2 border-white font-nunito text-sm" 
+                className="text-white m-3 p-1 rounded-lg border-l-2 border-r-2 border-white font-nunito text-sm"
                 // style={{
                 //   backgroundColor: 'rgb(31, 41, 55)'
                 // }}
                 onClick={() => removeImage(activeSlide)}
               >
-                <DeleteIcon width={'4rem'} height={"2rem"} />
+                <DeleteIcon width={"4rem"} height={"2rem"} />
                 <div className="mt-1">Delete</div>
                 {/* <Close imageIndex={index} /> */}
               </button>
@@ -276,7 +323,7 @@ const Gallery = () => {
                   setIsEditing(true);
                 }}
               >
-                <EditIcon width={'4rem'} height={"2rem"} />
+                <EditIcon width={"4rem"} height={"2rem"} />
                 <div className="mt-1">Edit</div>
                 {/* <Close imageIndex={index} /> */}
               </button>
@@ -316,7 +363,7 @@ const Gallery = () => {
         </motion.div>
       ) : (
         <div
-          className="h-[90vh] w-screen flex justify-center items-center flex-col"
+          className="absolute h-[90vh] w-screen flex justify-center items-center flex-col"
           style={{
             position: "absolute",
             top: "10%",
@@ -324,66 +371,87 @@ const Gallery = () => {
         >
           {pdfGenerated ? (
             <>
-              <PdfDoneIcon />
+              {url ? <PdfDoneIcon /> : ""}
+
               <div className="text-gray-300 text-center mt-3 px-3 sm:text-lg text-sm overflow-visible">
-                <span className="text-xl font-bold">Done!</span>
-                <br /> <div className="my-3">
-                  Your pdf is generated
-                </div> <br />{" "}
+                <span className="text-xl font-bold">
+                  {!url ? "Creating PDF" : "Done!"}
+                </span>
+                <br />
+                <div className="my-3">
+                  {!url
+                    ? "Your PDF is being generated, Please wait..."
+                    : "Your pdf has been generated"}
+                </div>{" "}
+                <br />{" "}
               </div>
               {modal && (
                 <div className="text-red-400">
                   You need to login to use this feature
                 </div>
               )}
-              <div className="flex flex-col">
-                <motion.button
-                  className="border-white border-2 bg-[#4CAF50] rounded-lg p-2 text-white my-2"
-                  initial={{
-                    opacity: 1,
-                  }}
-                  animate={{
-                    opacity: !!user ? 1 : 0.2,
-                  }}
-                  transition={{
-                    duration: 0.7,
-                  }}
-                  onClick={() =>
-                    !!user ? console.log("hello") : setModal(true)
-                  }
-                >
-                  <div className="flex justify-evenly">
-                    <div>Share on</div>
-                    <div className="h-[100%] w-[20%] mt-1">
-                      <WhatsappLogo />
+              {url ? (
+                <div className="flex flex-col">
+                  <motion.button
+                    className="border-white border-2 bg-[#4CAF50] rounded-lg p-2 text-white my-2"
+                    initial={{
+                      opacity: 1,
+                    }}
+                    animate={{
+                      opacity: !!user ? 1 : 0.2,
+                    }}
+                    transition={{
+                      duration: 0.7,
+                    }}
+                    onClick={() =>
+                      !!user ? shareToOtherApps() : setModal(true)
+                    }
+                  >
+                    <div className="flex justify-evenly">
+                      <div>Share on</div>
+                      <div className="h-[100%] w-[20%] mt-1">
+                        <WhatsappLogo />
+                      </div>
                     </div>
-                  </div>
-                </motion.button>
-                <motion.button
-                  className="border-white border-2 bg-red-500 rounded-lg p-2 text-white my-2"
-                  initial={{
-                    opacity: 1,
-                  }}
-                  animate={{
-                    opacity: !!user ? 1 : 0.2,
-                  }}
-                  transition={{
-                    duration: 0.7,
-                  }}
-                  onClick={() =>
-                    !!user ? console.log("hello") : setModal(true)
-                  }
-                >
-                  Copy URL
-                </motion.button>
-                <button
-                  id="download"
-                  onClick={handlePdfShare}
-                  className="border-white border-2 bg-primary rounded-lg p-2 text-white my-2"
-                >
-                  Download PDF
-                </button>
-              </div>
+                  </motion.button>
+                  <motion.button
+                    className="border-white border-2 bg-red-500 rounded-lg p-2 text-white my-2"
+                    initial={{
+                      opacity: 1,
+                    }}
+                    animate={{
+                      opacity: !!user ? 1 : 0.2,
+                    }}
+                    transition={{
+                      duration: 0.7,
+                    }}
+                    onClick={() => {
+                      if (!!user) {
+                        setIsLoading(true);
+                        saveToCloud(pdfRes.pdfFile, setCopied);
+                      } else setModal(true);
+                    }}
+                  >
+                    Copy URL
+                  </motion.button>
+                  <button
+                    id="download"
+                    onClick={handlePdfShare}
+                    className="border-white border-2 bg-primary rounded-lg p-2 text-white my-2"
+                  >
+                    Download PDF
+                  </button>
+                  {!isCopied ? (
+                    isLoading && <LoadingCircle />
+                  ) : (
+                    <div className="w-5 h-5 relative left-[120%] -top-1/2">
+                      <TickIcon />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                ""
+              )}
             </>
           ) : (
             <>
